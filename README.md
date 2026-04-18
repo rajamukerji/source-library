@@ -57,6 +57,25 @@ Stowry is intended to operate as an **external companion application**, not as a
 
 The application is not intended to post, comment, vote, moderate, or otherwise perform social actions on Reddit on the user’s behalf. Its role is to read the authenticated user’s own saved content, preserve relevant metadata, and make that material easier to organize, retrieve, and optionally share inside Stowry’s own workspace model.
 
+## Reddit access boundaries
+
+Stowry’s requested Reddit access is intended to remain **read-only** and narrowly scoped. The reviewer-facing position for Reddit approval is that Stowry should only request the minimum identity and saved-history access required to link a user’s Reddit account and import that same user’s own saved posts and comments into a private Stowry library.
+
+| Out-of-scope Reddit action | Stowry position |
+|---|---|
+| Posting or submitting content | Not supported |
+| Commenting or replying | Not supported |
+| Voting | Not supported |
+| Moderation actions | Not supported |
+| Private messaging or chat automation | Not supported |
+| Scraping outside approved Reddit API access | Not supported |
+| AI or model training on Reddit data | Not supported |
+| Ads targeting, resale, or public feed replacement | Not supported |
+
+## Data handling posture
+
+For the planned Reddit integration, the intended privacy posture is that Reddit account linkage and token handling occur server-side, while imported saved items are used only for the linked user’s private organization and retrieval workflow. Disconnect and deletion behavior will be documented explicitly as part of the production Reddit-linking implementation.
+
 ## Current screen and workflow coverage
 
 | Screen | Purpose |
@@ -107,6 +126,9 @@ tests/
   source-library.test.ts # Unit tests for model helpers
 README.md
 REVIEWERS.md
+REDDIT_USE_CASE.md
+PRIVACY.md
+REDDIT_RESUBMISSION_EMAIL.md
 ```
 
 ## Local development
@@ -138,7 +160,7 @@ Because the development host is environment-specific, reviewers should use the e
 
 ## How to evaluate this repository quickly
 
-A reviewer who wants to understand the project efficiently should start with the product framing in this README, then inspect `lib/source-library.tsx` for the domain model, `app/(tabs)/search.tsx` for retrieval behavior, `app/folder/[id].tsx` for collaboration modeling, and `tests/source-library.test.ts` for the current automated coverage of core library logic.
+A reviewer who wants to understand the project efficiently should start with the product framing in this README, then read `REVIEWERS.md`, `REDDIT_USE_CASE.md`, and `PRIVACY.md`, and then inspect `lib/source-library.tsx` for the domain model, `app/(tabs)/search.tsx` for retrieval behavior, `app/folder/[id].tsx` for collaboration modeling, and `tests/source-library.test.ts` for the current automated coverage of core library logic.
 
 ## Near-term roadmap
 

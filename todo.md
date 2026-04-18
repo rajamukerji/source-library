@@ -41,3 +41,9 @@
 - [x] Add a reviewer-facing explanation of current MVP scope, implemented features, and planned Reddit integration
 - [x] Add clear setup, environment, and redirect-URI guidance for API reviewers
 - [x] Update repository presentation for public evaluation and verify the published result
+- [x] Analyze the Reddit API rejection against the current Stowry submission materials
+- [x] Identify likely Responsible Builder Policy and application-detail gaps blocking approval
+- [x] Prepare a stronger Reddit API resubmission package with tighter positioning and reviewer-facing evidence
+- [x] Add a dedicated Reddit use-case document with exact intended behavior, non-goals, and reviewer-facing scope boundaries
+- [x] Add a privacy and data-handling document covering Reddit token storage, imported-content retention, disconnect, and deletion behavior
+- [x] Add a concise Reddit API resubmission draft and tighten repository-facing policy language for reviewers
