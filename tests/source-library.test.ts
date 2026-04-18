@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  connectorProfiles,
   getRoleLabel,
   inferSourceMetadata,
   recentSearchesSeed,
@@ -30,6 +31,11 @@ describe("source library model", () => {
     expect(seedEntries.some((entry) => entry.source === "reddit")).toBe(true);
     expect(seedEntries.some((entry) => entry.source === "slack")).toBe(true);
     expect(recentSearchesSeed).toContain("folders");
+  });
+
+  it("publishes a connector roadmap with Reddit as the live primary connector", () => {
+    expect(connectorProfiles.find((connector) => connector.id === "reddit")?.status).toBe("live");
+    expect(connectorProfiles.some((connector) => connector.id === "slack")).toBe(true);
   });
 
   it("maps sharing roles to stable UI labels", () => {

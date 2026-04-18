@@ -1,4 +1,7 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+
+const STORAGE_KEY = "source-library:v1";
 
 export type SourceType = "reddit" | "slack" | "discord" | "x" | "web";
 export type EntryStatus = "inbox" | "filed" | "archived";
@@ -44,12 +47,32 @@ export interface QuickStat {
   detail: string;
 }
 
+export interface ConnectorProfile {
+  id: SourceType;
+  label: string;
+  status: "live" | "next" | "planned";
+  detail: string;
+  capabilities: string[];
+}
+
 interface CaptureInput {
   url: string;
   title: string;
   note: string;
   folderId?: string;
   tags?: string[];
+}
+
+interface CreateFolderInput {
+  name: string;
+  description: string;
+  sharedRole?: ShareRole;
+}
+
+interface PersistedState {
+  entries: Entry[];
+  folders: Folder[];
+  recentSearches: string[];
 }
 
 interface SourceLibraryContextValue {
@@ -62,14 +85,28 @@ interface SourceLibraryContextValue {
   pinnedFolders: Folder[];
   recentEntries: Entry[];
   favoriteEntries: Entry[];
+  connectors: ConnectorProfile[];
+  hasHydrated: boolean;
   addEntry: (input: CaptureInput) => string;
+  createFolder: (input: CreateFolderInput) => string;
   toggleFavorite: (entryId: string) => void;
   updateEntryFolder: (entryId: string, folderId: string) => void;
   archiveEntry: (entryId: string) => void;
+  setFolderRole: (folderId: string, role?: ShareRole) => void;
+  addRecentSearch: (query: string) => void;
   getEntryById: (entryId: string) => Entry | undefined;
   getFolderById: (folderId: string) => Folder | undefined;
+  getFolderEntries: (folderId: string) => Entry[];
   searchEntries: (query: string) => Entry[];
 }
+
+const folderAccentOptions = [
+  { color: "#4F46E5", icon: "sparkles" },
+  { color: "#0F766E", icon: "layers" },
+  { color: "#D97706", icon: "bookmark" },
+  { color: "#2563EB", icon: "folder" },
+  { color: "#9333EA", icon: "grid" },
+];
 
 export const seedFolders: Folder[] = [
   {
@@ -212,6 +249,44 @@ export const seedEntries: Entry[] = [
 
 export const recentSearchesSeed = ["folders", "collaboration", "product copy"];
 
+export const connectorProfiles: ConnectorProfile[] = [
+  {
+    id: "reddit",
+    label: "Reddit",
+    status: "live",
+    detail: "Primary MVP connector with manual capture and a product model ready for saved-item sync.",
+    capabilities: ["Manual import", "Folder filing", "Notes", "Share roles"],
+  },
+  {
+    id: "web",
+    label: "Web links",
+    status: "next",
+    detail: "Generic URL capture already fits the canonical model and is the next easiest connector to deepen.",
+    capabilities: ["Paste URL", "Article capture", "Tagging"],
+  },
+  {
+    id: "slack",
+    label: "Slack",
+    status: "planned",
+    detail: "Planned as a future connector where messages and threads become first-class library entries.",
+    capabilities: ["Permalinks", "Thread context"],
+  },
+  {
+    id: "discord",
+    label: "Discord",
+    status: "planned",
+    detail: "Planned for server and channel capture once link parsing and auth strategy are defined.",
+    capabilities: ["Message links", "Server context"],
+  },
+  {
+    id: "x",
+    label: "X",
+    status: "planned",
+    detail: "Planned for thread capture and social research use cases after the core library flows stabilize.",
+    capabilities: ["Post links", "Thread grouping"],
+  },
+];
+
 const SourceLibraryContext = createContext<SourceLibraryContextValue | null>(null);
 
 export function inferSourceMetadata(url: string): {
@@ -245,14 +320,72 @@ export function inferSourceMetadata(url: string): {
   return { source: "web", sourceLabel: "Web", sourceSpace: "Saved link" };
 }
 
+function getAccent(index: number) {
+  return folderAccentOptions[index % folderAccentOptions.length];
+}
+
+function buildShareReason(role?: ShareRole) {
+  if (role === "editor") return "Shared via collaborative folder";
+  if (role === "viewer") return "Shared as read-only reference";
+  return undefined;
+}
+
 export function SourceLibraryProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<Entry[]>(seedEntries);
   const [folders, setFolders] = useState<Folder[]>(seedFolders);
-  const [recentSearches] = useState<string[]>(recentSearchesSeed);
+  const [recentSearches, setRecentSearches] = useState<string[]>(recentSearchesSeed);
+  const [hasHydrated, setHasHydrated] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function hydrate() {
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!stored) {
+          if (mounted) setHasHydrated(true);
+          return;
+        }
+
+        const parsed = JSON.parse(stored) as Partial<PersistedState>;
+        if (!mounted) return;
+
+        if (parsed.entries?.length) setEntries(parsed.entries);
+        if (parsed.folders?.length) setFolders(parsed.folders);
+        if (parsed.recentSearches?.length) setRecentSearches(parsed.recentSearches);
+      } catch (error) {
+        console.warn("Failed to hydrate Source Library state", error);
+      } finally {
+        if (mounted) setHasHydrated(true);
+      }
+    }
+
+    hydrate();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydrated) return;
+
+    const payload: PersistedState = {
+      entries,
+      folders,
+      recentSearches,
+    };
+
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload)).catch((error) => {
+      console.warn("Failed to persist Source Library state", error);
+    });
+  }, [entries, folders, recentSearches, hasHydrated]);
 
   const addEntry = (input: CaptureInput) => {
     const sourceMeta = inferSourceMetadata(input.url);
     const entryId = `e${Date.now()}`;
+    const folder = input.folderId ? folders.find((item) => item.id === input.folderId) : undefined;
+
     const nextEntry: Entry = {
       id: entryId,
       title: input.title.trim() || "Untitled capture",
@@ -265,26 +398,45 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
       savedAt: "Just now",
       sourceCreatedAt: "Unknown",
       folderIds: input.folderId ? [input.folderId] : [],
-      tags: input.tags ?? [],
+      tags: input.tags?.filter(Boolean) ?? [],
       note: input.note.trim(),
       favorite: false,
       status: input.folderId ? "filed" : "inbox",
-      itemType: sourceMeta.source === "reddit" ? "post" : "article",
+      itemType: sourceMeta.source === "reddit" ? "post" : sourceMeta.source === "slack" ? "message" : "article",
+      shareRole: folder?.sharedRole,
+      shareReason: folder?.sharedRole ? `Shared via ${folder.name}` : undefined,
     };
 
     setEntries((current) => [nextEntry, ...current]);
 
     if (input.folderId) {
       setFolders((current) =>
-        current.map((folder) =>
-          folder.id === input.folderId
-            ? { ...folder, entryIds: [entryId, ...folder.entryIds] }
-            : folder,
+        current.map((item) =>
+          item.id === input.folderId ? { ...item, entryIds: [entryId, ...item.entryIds] } : item,
         ),
       );
     }
 
     return entryId;
+  };
+
+  const createFolder = (input: CreateFolderInput) => {
+    const folderId = `f${Date.now()}`;
+    const accent = getAccent(folders.length);
+    const nextFolder: Folder = {
+      id: folderId,
+      name: input.name.trim(),
+      description: input.description.trim() || "A new topic-focused collection in Source Library.",
+      color: accent.color,
+      icon: accent.icon,
+      entryIds: [],
+      sharedRole: input.sharedRole,
+      collaborators: input.sharedRole ? 2 : undefined,
+      isPinned: folders.filter((folder) => folder.isPinned).length < 3,
+    };
+
+    setFolders((current) => [nextFolder, ...current]);
+    return folderId;
   };
 
   const toggleFavorite = (entryId: string) => {
@@ -296,25 +448,27 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
   };
 
   const updateEntryFolder = (entryId: string, folderId: string) => {
+    const folder = folders.find((item) => item.id === folderId);
+
     setEntries((current) =>
       current.map((entry) =>
         entry.id === entryId
           ? {
               ...entry,
-              folderIds: entry.folderIds.includes(folderId)
-                ? entry.folderIds
-                : [folderId, ...entry.folderIds],
+              folderIds: entry.folderIds.includes(folderId) ? entry.folderIds : [folderId, ...entry.folderIds],
               status: "filed",
+              shareRole: entry.shareRole ?? folder?.sharedRole,
+              shareReason: entry.shareReason ?? (folder?.sharedRole ? `Shared via ${folder.name}` : undefined),
             }
           : entry,
       ),
     );
 
     setFolders((current) =>
-      current.map((folder) =>
-        folder.id === folderId && !folder.entryIds.includes(entryId)
-          ? { ...folder, entryIds: [entryId, ...folder.entryIds] }
-          : folder,
+      current.map((item) =>
+        item.id === folderId && !item.entryIds.includes(entryId)
+          ? { ...item, entryIds: [entryId, ...item.entryIds] }
+          : item,
       ),
     );
   };
@@ -327,8 +481,45 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const setFolderRole = (folderId: string, role?: ShareRole) => {
+    const folder = folders.find((item) => item.id === folderId);
+    if (!folder) return;
+
+    setFolders((current) =>
+      current.map((item) =>
+        item.id === folderId
+          ? {
+              ...item,
+              sharedRole: role,
+              collaborators: role ? Math.max(item.collaborators ?? 2, 2) : undefined,
+            }
+          : item,
+      ),
+    );
+
+    setEntries((current) =>
+      current.map((entry) =>
+        entry.folderIds.includes(folderId)
+          ? {
+              ...entry,
+              shareRole: role,
+              shareReason: role ? `Shared via ${folder.name}` : buildShareReason(undefined),
+            }
+          : entry,
+      ),
+    );
+  };
+
+  const addRecentSearch = (query: string) => {
+    const normalized = query.trim();
+    if (!normalized) return;
+
+    setRecentSearches((current) => [normalized, ...current.filter((item) => item !== normalized)].slice(0, 6));
+  };
+
   const getEntryById = (entryId: string) => entries.find((entry) => entry.id === entryId);
   const getFolderById = (folderId: string) => folders.find((folder) => folder.id === folderId);
+  const getFolderEntries = (folderId: string) => entries.filter((entry) => entry.folderIds.includes(folderId));
 
   const searchEntries = (query: string) => {
     const normalized = query.trim().toLowerCase();
@@ -349,23 +540,14 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const inboxEntries = useMemo(
-    () => entries.filter((entry) => entry.status === "inbox"),
-    [entries],
-  );
+  const inboxEntries = useMemo(() => entries.filter((entry) => entry.status === "inbox"), [entries]);
   const sharedEntries = useMemo(
     () => entries.filter((entry) => entry.shareRole && entry.shareRole !== "owner"),
     [entries],
   );
-  const pinnedFolders = useMemo(
-    () => folders.filter((folder) => folder.isPinned),
-    [folders],
-  );
+  const pinnedFolders = useMemo(() => folders.filter((folder) => folder.isPinned), [folders]);
   const recentEntries = useMemo(() => entries.slice(0, 4), [entries]);
-  const favoriteEntries = useMemo(
-    () => entries.filter((entry) => entry.favorite),
-    [entries],
-  );
+  const favoriteEntries = useMemo(() => entries.filter((entry) => entry.favorite), [entries]);
 
   const stats = useMemo<QuickStat[]>(
     () => [
@@ -377,15 +559,15 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
       {
         label: "Pinned folders",
         value: String(pinnedFolders.length),
-        detail: `${sharedEntries.length} shared items active`,
+        detail: `${folders.filter((folder) => folder.sharedRole).length} shared folders active`,
       },
       {
         label: "Sources",
         value: String(new Set(entries.map((entry) => entry.source)).size),
-        detail: "Reddit first, multi-source ready",
+        detail: "Reddit first, connector-ready",
       },
     ],
-    [entries, inboxEntries.length, pinnedFolders.length, sharedEntries.length],
+    [entries, folders, inboxEntries.length, pinnedFolders.length],
   );
 
   const value = useMemo<SourceLibraryContextValue>(
@@ -399,15 +581,32 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
       pinnedFolders,
       recentEntries,
       favoriteEntries,
+      connectors: connectorProfiles,
+      hasHydrated,
       addEntry,
+      createFolder,
       toggleFavorite,
       updateEntryFolder,
       archiveEntry,
+      setFolderRole,
+      addRecentSearch,
       getEntryById,
       getFolderById,
+      getFolderEntries,
       searchEntries,
     }),
-    [entries, folders, stats, recentSearches, inboxEntries, sharedEntries, pinnedFolders, recentEntries, favoriteEntries],
+    [
+      entries,
+      folders,
+      stats,
+      recentSearches,
+      inboxEntries,
+      sharedEntries,
+      pinnedFolders,
+      recentEntries,
+      favoriteEntries,
+      hasHydrated,
+    ],
   );
 
   return <SourceLibraryContext.Provider value={value}>{children}</SourceLibraryContext.Provider>;

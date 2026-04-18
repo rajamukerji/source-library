@@ -1,8 +1,14 @@
 import { Link } from "expo-router";
 import { Pressable, Text, View } from "react-native";
 
-import { getRoleLabel, type Entry, type Folder, type SourceType } from "@/lib/source-library";
 import { cn } from "@/lib/utils";
+import {
+  getRoleLabel,
+  type ConnectorProfile,
+  type Entry,
+  type Folder,
+  type SourceType,
+} from "@/lib/source-library";
 
 const sourceStyles: Record<SourceType, { label: string; className: string }> = {
   reddit: { label: "Reddit", className: "bg-orange-100 text-orange-700" },
@@ -89,16 +95,86 @@ export function SourceBadge({ source }: { source: SourceType }) {
   );
 }
 
+export function EmptyState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <View className="rounded-3xl border border-dashed border-border bg-surface p-5">
+      <Text className="text-lg font-semibold text-foreground">{title}</Text>
+      <Text className="mt-2 text-sm leading-6 text-muted">{description}</Text>
+      {action ? <View className="mt-4">{action}</View> : null}
+    </View>
+  );
+}
+
+export function InfoCard({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow?: string;
+  title: string;
+  description: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <View className="rounded-3xl border border-border bg-surface p-5">
+      {eyebrow ? <Text className="text-sm font-semibold uppercase tracking-[2px] text-primary">{eyebrow}</Text> : null}
+      <Text className="mt-2 text-lg font-semibold text-foreground">{title}</Text>
+      <Text className="mt-2 text-sm leading-6 text-muted">{description}</Text>
+      {children ? <View className="mt-4">{children}</View> : null}
+    </View>
+  );
+}
+
+export function ConnectorCard({ connector }: { connector: ConnectorProfile }) {
+  const statusClassName = connector.status === "live"
+    ? "bg-emerald-100 text-emerald-700"
+    : connector.status === "next"
+      ? "bg-sky-100 text-sky-700"
+      : "bg-slate-100 text-slate-700";
+  const statusLabel = connector.status === "live" ? "Live" : connector.status === "next" ? "Next" : "Planned";
+
+  return (
+    <View className="rounded-3xl border border-border bg-surface p-4">
+      <View className="flex-row items-center justify-between gap-3">
+        <Text className="text-lg font-semibold text-foreground">{connector.label}</Text>
+        <View className={cn("rounded-full px-3 py-1", statusClassName)}>
+          <Text className="text-xs font-semibold">{statusLabel}</Text>
+        </View>
+      </View>
+      <Text className="mt-3 text-sm leading-6 text-muted">{connector.detail}</Text>
+      <View className="mt-4 flex-row flex-wrap gap-2">
+        {connector.capabilities.map((capability) => (
+          <View key={capability} className="rounded-full bg-background px-3 py-1">
+            <Text className="text-xs font-medium text-muted">{capability}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export function FolderCard({ folder }: { folder: Folder }) {
   return (
-    <Link href={{ pathname: "/capture", params: { folderId: folder.id } }} asChild>
+    <Link href={{ pathname: "/folder/[id]", params: { id: folder.id } }} asChild>
       <Pressable
         style={({ pressed }) => [{ opacity: pressed ? 0.82 : 1 }]}
         className="rounded-3xl border border-border bg-surface p-4"
       >
         <View className="flex-row items-start justify-between gap-3">
           <View className="flex-1 gap-1">
-            <Text className="text-lg font-semibold text-foreground">{folder.name}</Text>
+            <View className="flex-row items-center gap-2">
+              <View className="h-3 w-3 rounded-full" style={{ backgroundColor: folder.color }} />
+              <Text className="text-lg font-semibold text-foreground">{folder.name}</Text>
+            </View>
             <Text className="text-sm leading-5 text-muted">{folder.description}</Text>
           </View>
           {folder.sharedRole ? <RoleBadge role={folder.sharedRole} /> : null}

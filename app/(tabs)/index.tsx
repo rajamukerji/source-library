@@ -2,11 +2,18 @@ import { FlatList, Pressable, Text, View } from "react-native";
 import { Link } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { EntryCard, FolderCard, SectionHeader, StatCard } from "@/components/source-library/ui";
+import {
+  ConnectorCard,
+  EntryCard,
+  FolderCard,
+  InfoCard,
+  SectionHeader,
+  StatCard,
+} from "@/components/source-library/ui";
 import { useSourceLibrary } from "@/lib/source-library";
 
 export default function HomeScreen() {
-  const { stats, recentEntries, pinnedFolders, favoriteEntries } = useSourceLibrary();
+  const { connectors, stats, recentEntries, pinnedFolders, favoriteEntries, hasHydrated } = useSourceLibrary();
 
   return (
     <ScreenContainer className="px-5 pb-6">
@@ -21,7 +28,7 @@ export default function HomeScreen() {
                 Save Reddit now, grow into a multi-source library later.
               </Text>
               <Text className="text-base leading-7 text-muted">
-                Organize posts, preserve notes, and share folders with clear read or write roles.
+                Organize posts, preserve notes, assign folders, and make sharing roles explicit from the beginning.
               </Text>
             </View>
 
@@ -50,9 +57,25 @@ export default function HomeScreen() {
               </Link>
             </View>
 
+            <InfoCard
+              eyebrow="First-run guide"
+              title={hasHydrated ? "How to use the MVP" : "Preparing your library"}
+              description="Start by capturing a Reddit link, file it into a topic folder, and then use folder sharing to decide whether collaborators can only read or can also curate."
+            />
+
+            <SectionHeader
+              title="Connector roadmap"
+              subtitle="Reddit leads the MVP, but the product already frames future connectors as first-class citizens in the library model."
+            />
+            <View className="gap-3">
+              {connectors.map((connector) => (
+                <ConnectorCard key={connector.id} connector={connector} />
+              ))}
+            </View>
+
             <SectionHeader
               title="Pinned folders"
-              subtitle="Collections that reflect the Reddit-first MVP and future connector direction."
+              subtitle="Collections that reflect the Reddit-first MVP while staying ready for mixed-source curation later on."
             />
             <View className="gap-3">
               {pinnedFolders.map((folder) => (
@@ -62,7 +85,7 @@ export default function HomeScreen() {
 
             <SectionHeader
               title="Starred references"
-              subtitle="A quick set of items you are likely to reopen while shaping the product."
+              subtitle="A quick set of items you are likely to reopen while shaping the product and its connector roadmap."
             />
             <View className="gap-3">
               {favoriteEntries.slice(0, 2).map((entry) => (
@@ -72,7 +95,7 @@ export default function HomeScreen() {
 
             <SectionHeader
               title="Recent captures"
-              subtitle="The most recent items across sources, ordered for quick retrieval."
+              subtitle="The most recent items across sources, ordered for quick retrieval and follow-up filing."
             />
           </View>
         }

@@ -16,3 +16,10 @@
 - [x] Add tests covering the core data model and key screen rendering
 - [x] Validate the app status and resolve build or type issues before delivery
 - [x] Fix the Expo Router tab configuration error caused by combining href and tabBarButton on the add shortcut tab
+- [x] Translate the remaining product spec into a concrete MVP backlog with implementation priorities
+- [x] Add local persistence so entries, folders, and user actions survive app restarts
+- [x] Add folder creation and basic folder management flows
+- [x] Add clearer onboarding or empty-state guidance for first-time users
+- [x] Add a sharing management surface that expresses viewer and editor access as an MVP collaboration model
+- [x] Add connector roadmap affordances so Reddit is primary but future sources remain visible in-product
+- [x] Organize the project as a clean git-backed repository with a developer-friendly README and ignore rules

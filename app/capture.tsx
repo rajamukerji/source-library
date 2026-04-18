@@ -3,16 +3,22 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { FilterChip, SectionHeader } from "@/components/source-library/ui";
-import { useSourceLibrary } from "@/lib/source-library";
+import {
+  ConnectorCard,
+  FilterChip,
+  InfoCard,
+  SectionHeader,
+  SourceBadge,
+} from "@/components/source-library/ui";
+import { inferSourceMetadata, useSourceLibrary } from "@/lib/source-library";
 
-const suggestedTags = ["research", "shareable", "buy-later", "retrieval"];
+const suggestedTags = ["research", "shareable", "buy-later", "retrieval", "collab"];
 
 export default function CaptureScreen() {
   const params = useLocalSearchParams<{ folderId?: string }>();
-  const { addEntry, folders } = useSourceLibrary();
+  const { addEntry, folders, connectors } = useSourceLibrary();
   const initialFolder = useMemo(
-    () => folders.find((folder) => folder.id === params.folderId)?.id ?? folders[0]?.id,
+    () => folders.find((folder) => folder.id === params.folderId)?.id,
     [folders, params.folderId],
   );
 
@@ -21,6 +27,8 @@ export default function CaptureScreen() {
   const [note, setNote] = useState("Useful evidence for the Reddit-first capture story.");
   const [selectedFolderId, setSelectedFolderId] = useState<string | undefined>(initialFolder);
   const [selectedTags, setSelectedTags] = useState<string[]>(["research"]);
+
+  const sourceMeta = useMemo(() => inferSourceMetadata(url), [url]);
 
   const handleSave = () => {
     const entryId = addEntry({
@@ -38,7 +46,7 @@ export default function CaptureScreen() {
       <ScrollView contentContainerStyle={{ gap: 20, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
         <SectionHeader
           title="Capture a source"
-          subtitle="The MVP uses Reddit as the primary use case, but this flow already accepts other future-source links."
+          subtitle="The MVP is Reddit-first, but the import model is already built to normalize future sources into the same library structure."
         />
 
         <View className="gap-3 rounded-3xl border border-border bg-surface p-5">
@@ -51,9 +59,10 @@ export default function CaptureScreen() {
             placeholderTextColor="#94A3B8"
             className="rounded-2xl border border-border bg-background px-4 py-4 text-base text-foreground"
           />
-          <Text className="text-xs leading-5 text-muted">
-            Incoming native share targets are not part of the initial scaffold, so the first build focuses on a clean manual import flow.
-          </Text>
+          <View className="flex-row items-center gap-2">
+            <SourceBadge source={sourceMeta.source} />
+            <Text className="text-sm text-muted">Detected source space: {sourceMeta.sourceSpace}</Text>
+          </View>
         </View>
 
         <View className="gap-3 rounded-3xl border border-border bg-surface p-5">
@@ -79,6 +88,11 @@ export default function CaptureScreen() {
         <View className="gap-4 rounded-3xl border border-border bg-surface p-5">
           <Text className="text-sm font-semibold text-foreground">Choose a folder</Text>
           <View className="flex-row flex-wrap gap-2">
+            <FilterChip
+              label="Leave in Inbox"
+              active={!selectedFolderId}
+              onPress={() => setSelectedFolderId(undefined)}
+            />
             {folders.map((folder) => (
               <FilterChip
                 key={folder.id}
@@ -106,6 +120,22 @@ export default function CaptureScreen() {
               );
             })}
           </View>
+        </View>
+
+        <InfoCard
+          eyebrow="Import behavior"
+          title="Capture now, enrich later"
+          description="Manual import is the first MVP path. The same entry model is ready for future native share targets, sync connectors, and richer metadata extraction."
+        />
+
+        <SectionHeader
+          title="Connector status"
+          subtitle="This screen keeps the future visible so the product does not feel artificially limited to Reddit forever."
+        />
+        <View className="gap-3">
+          {connectors.slice(0, 3).map((connector) => (
+            <ConnectorCard key={connector.id} connector={connector} />
+          ))}
         </View>
 
         <View className="flex-row gap-3">

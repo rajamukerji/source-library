@@ -1,12 +1,42 @@
-import { FlatList, Text, View } from "react-native";
+import { useState } from "react";
+import { FlatList, Pressable, Text, TextInput, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { EntryCard, FolderCard, SectionHeader } from "@/components/source-library/ui";
-import { useSourceLibrary } from "@/lib/source-library";
+import {
+  EmptyState,
+  EntryCard,
+  FilterChip,
+  InfoCard,
+  FolderCard,
+  SectionHeader,
+} from "@/components/source-library/ui";
+import { type ShareRole, useSourceLibrary } from "@/lib/source-library";
+
+const folderRoles: Array<{ label: string; value?: ShareRole }> = [
+  { label: "Private" },
+  { label: "Viewer" as const, value: "viewer" },
+  { label: "Editor" as const, value: "editor" },
+];
 
 export default function LibraryScreen() {
-  const { folders, entries } = useSourceLibrary();
+  const { folders, entries, createFolder } = useSourceLibrary();
   const filedEntries = entries.filter((entry) => entry.status === "filed");
+
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [sharedRole, setSharedRole] = useState<ShareRole | undefined>();
+
+  const handleCreateFolder = () => {
+    if (!name.trim()) return;
+    createFolder({
+      name,
+      description,
+      sharedRole,
+    });
+    setName("");
+    setDescription("");
+    setSharedRole(undefined);
+  };
 
   return (
     <ScreenContainer className="px-5 pb-6">
@@ -17,25 +47,84 @@ export default function LibraryScreen() {
           <View className="gap-6 pb-6 pt-4">
             <SectionHeader
               title="Library"
-              subtitle="Topic-based folders sit above source platforms, so Reddit is useful now without constraining future sources."
+              subtitle="Folders are the MVP unit of organization. They group content by topic first, source second, and sharing policy third."
             />
-            <View className="gap-3">
-              {folders.map((folder) => (
-                <FolderCard key={folder.id} folder={folder} />
-              ))}
-            </View>
-            <View className="rounded-3xl border border-border bg-surface p-5">
-              <Text className="text-sm font-semibold uppercase tracking-[2px] text-primary">Architecture cue</Text>
-              <Text className="mt-3 text-lg font-semibold text-foreground">The library model is source-agnostic.</Text>
-              <Text className="mt-2 text-sm leading-6 text-muted">
-                Every entry keeps its source context, but folders, tags, notes, and sharing behave the same way no matter where the item came from.
+
+            <View className="gap-3 rounded-3xl border border-border bg-surface p-5">
+              <Text className="text-lg font-semibold text-foreground">Create a folder</Text>
+              <Text className="text-sm leading-6 text-muted">
+                Use one folder per topic or project. Shared role settings express whether collaborators can only retrieve items or also help curate them.
               </Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder="Folder name"
+                placeholderTextColor="#94A3B8"
+                returnKeyType="done"
+                className="rounded-2xl border border-border bg-background px-4 py-4 text-base text-foreground"
+              />
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="What belongs in this folder?"
+                placeholderTextColor="#94A3B8"
+                returnKeyType="done"
+                className="rounded-2xl border border-border bg-background px-4 py-4 text-base text-foreground"
+              />
+              <View className="flex-row flex-wrap gap-2">
+                {folderRoles.map((role) => (
+                  <FilterChip
+                    key={role.label}
+                    label={role.label}
+                    active={sharedRole === role.value || (!sharedRole && !role.value)}
+                    onPress={() => setSharedRole(role.value)}
+                  />
+                ))}
+              </View>
+              <Pressable
+                onPress={handleCreateFolder}
+                style={({ pressed }) => [{ opacity: !name.trim() || pressed ? 0.8 : 1 }]}
+                disabled={!name.trim()}
+                className="rounded-full bg-primary px-5 py-4"
+              >
+                <Text className="text-center text-base font-semibold text-white">Create folder</Text>
+              </Pressable>
             </View>
+
+            <InfoCard
+              eyebrow="MVP behavior"
+              title="The library model is source-agnostic"
+              description="Every entry keeps its source context, but folders, tags, notes, and sharing behave consistently no matter where the item came from."
+            />
+
+            <SectionHeader
+              title="Folders"
+              subtitle="Tap any folder to review its entries, adjust its sharing role, or capture directly into it."
+            />
+            {folders.length === 0 ? (
+              <EmptyState
+                title="No folders yet"
+                description="Create your first folder above to move beyond a dumping-ground save list and into a topic-based library."
+              />
+            ) : (
+              <View className="gap-3">
+                {folders.map((folder) => (
+                  <FolderCard key={folder.id} folder={folder} />
+                ))}
+              </View>
+            )}
+
             <SectionHeader
               title="Filed entries"
-              subtitle="These cards are optimized for retrieval: source context, folder context, and the reason you saved them."
+              subtitle="These items already live in at least one folder, so they are easier to recover and reuse later."
             />
           </View>
+        }
+        ListEmptyComponent={
+          <EmptyState
+            title="Nothing has been filed yet"
+            description="Capture a link into a folder, or move an Inbox item into one of your folders to start building the library."
+          />
         }
         renderItem={({ item }) => <EntryCard entry={item} />}
         ItemSeparatorComponent={() => <View className="h-3" />}
