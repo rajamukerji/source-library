@@ -28,3 +28,12 @@
 - [x] Add a lightweight invite and share-link workflow in the MVP collaboration surface
 - [x] Add filtered library views for source type and favorites
 - [x] Add tests for the expanded sharing and folder-management behaviors
+- [ ] Add Reddit OAuth authentication flow for connecting a user's Reddit account
+- [ ] Add real Reddit saved-item import and sync into Source Library
+- [ ] Add native share-target capture support for Android and iOS entry ingestion
+- [ ] Add server-backed synced folders so libraries persist across devices and users
+- [ ] Add invitation flows with viewer and editor roles backed by the server
+- [ ] Add automated tests for auth, sync, share-target ingestion, and collaboration helpers
+- [ ] Prepare the Source Library repository for GitHub publication
+- [ ] Connect or create a GitHub repository for Source Library
+- [ ] Push the current MVP codebase to GitHub and verify the published result
