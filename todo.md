@@ -34,6 +34,10 @@
 - [ ] Add server-backed synced folders so libraries persist across devices and users
 - [ ] Add invitation flows with viewer and editor roles backed by the server
 - [ ] Add automated tests for auth, sync, share-target ingestion, and collaboration helpers
-- [ ] Prepare the Source Library repository for GitHub publication
-- [ ] Connect or create a GitHub repository for Source Library
-- [ ] Push the current MVP codebase to GitHub and verify the published result
+- [x] Prepare the Source Library repository for GitHub publication
+- [x] Connect or create a GitHub repository for Source Library
+- [x] Push the current MVP codebase to GitHub and verify the published result
+- [x] Tighten the public README for external reviewer evaluation
+- [x] Add a reviewer-facing explanation of current MVP scope, implemented features, and planned Reddit integration
+- [x] Add clear setup, environment, and redirect-URI guidance for API reviewers
+- [x] Update repository presentation for public evaluation and verify the published result
