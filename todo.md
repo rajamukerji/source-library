@@ -15,3 +15,4 @@
 - [x] Implement a source-agnostic data model and local seed data for Reddit-first flows
 - [x] Add tests covering the core data model and key screen rendering
 - [x] Validate the app status and resolve build or type issues before delivery
+- [x] Fix the Expo Router tab configuration error caused by combining href and tabBarButton on the add shortcut tab

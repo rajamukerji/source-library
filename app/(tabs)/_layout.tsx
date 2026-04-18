@@ -67,7 +67,6 @@ export default function TabLayout() {
         name="capture-shortcut"
         options={{
           title: "Add",
-          href: null,
           tabBarButton: () => <QuickAddButton />,
         }}
       />
