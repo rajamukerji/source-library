@@ -2,10 +2,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 const STORAGE_KEY = "source-library:v1";
+const APP_SHARE_BASE_URL = "https://source-library.app/share";
 
 export type SourceType = "reddit" | "slack" | "discord" | "x" | "web";
 export type EntryStatus = "inbox" | "filed" | "archived";
 export type ShareRole = "owner" | "editor" | "viewer";
+export type LibraryFilter = "all" | "favorites" | SourceType;
 
 export interface Folder {
   id: string;
@@ -91,6 +93,7 @@ interface SourceLibraryContextValue {
   createFolder: (input: CreateFolderInput) => string;
   toggleFavorite: (entryId: string) => void;
   updateEntryFolder: (entryId: string, folderId: string) => void;
+  toggleEntryFolderAssignment: (entryId: string, folderId: string) => void;
   archiveEntry: (entryId: string) => void;
   setFolderRole: (folderId: string, role?: ShareRole) => void;
   addRecentSearch: (query: string) => void;
@@ -106,6 +109,16 @@ const folderAccentOptions = [
   { color: "#D97706", icon: "bookmark" },
   { color: "#2563EB", icon: "folder" },
   { color: "#9333EA", icon: "grid" },
+];
+
+export const libraryFilterOptions: Array<{ id: LibraryFilter; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "favorites", label: "Starred" },
+  { id: "reddit", label: "Reddit" },
+  { id: "web", label: "Web" },
+  { id: "slack", label: "Slack" },
+  { id: "discord", label: "Discord" },
+  { id: "x", label: "X" },
 ];
 
 export const seedFolders: Folder[] = [
@@ -324,10 +337,78 @@ function getAccent(index: number) {
   return folderAccentOptions[index % folderAccentOptions.length];
 }
 
-function buildShareReason(role?: ShareRole) {
-  if (role === "editor") return "Shared via collaborative folder";
-  if (role === "viewer") return "Shared as read-only reference";
+function getHighestShareRole(roles: Array<ShareRole | undefined>): ShareRole | undefined {
+  if (roles.includes("editor")) return "editor";
+  if (roles.includes("viewer")) return "viewer";
   return undefined;
+}
+
+export function buildShareReason(folderNames: string[], role?: ShareRole) {
+  if (!role) return undefined;
+  if (folderNames.length === 0) {
+    return role === "editor" ? "Shared as editable entry" : "Shared as read-only entry";
+  }
+  if (folderNames.length === 1) return `Shared via ${folderNames[0]}`;
+  return `Shared across ${folderNames.length} folders`;
+}
+
+export function toggleFolderId(folderIds: string[], folderId: string) {
+  return folderIds.includes(folderId)
+    ? folderIds.filter((id) => id !== folderId)
+    : [folderId, ...folderIds];
+}
+
+export function deriveEntryCollaboration(
+  entry: Entry,
+  folders: Folder[],
+): { status: EntryStatus; shareRole?: ShareRole; shareReason?: string } {
+  const relatedFolders = folders.filter((folder) => entry.folderIds.includes(folder.id));
+  const role = getHighestShareRole(relatedFolders.map((folder) => folder.sharedRole));
+  const status: EntryStatus = entry.folderIds.length > 0 ? "filed" : entry.status === "archived" ? "archived" : "inbox";
+
+  return {
+    status,
+    shareRole: role,
+    shareReason: buildShareReason(relatedFolders.map((folder) => folder.name), role),
+  };
+}
+
+export function buildFolderShareLink(folder: Folder, role?: ShareRole) {
+  const resolvedRole = role ?? folder.sharedRole ?? "viewer";
+  return `${APP_SHARE_BASE_URL}/${folder.id}?role=${resolvedRole}`;
+}
+
+export function buildFolderInviteMessage(folder: Folder, role?: ShareRole) {
+  const resolvedRole = role ?? folder.sharedRole ?? "viewer";
+  const permissionLine = resolvedRole === "editor"
+    ? "You can add items, organize folders, and improve notes in this shared library."
+    : "You can browse and retrieve items, but not change the collection.";
+
+  return `Join my Source Library folder \"${folder.name}\" as a ${getRoleLabel(resolvedRole)}. ${permissionLine} ${buildFolderShareLink(folder, resolvedRole)}`;
+}
+
+function syncFolderEntryIds(entries: Entry[], folders: Folder[]) {
+  return folders.map((folder) => ({
+    ...folder,
+    entryIds: entries.filter((entry) => entry.folderIds.includes(folder.id)).map((entry) => entry.id),
+  }));
+}
+
+function hydrateEntryRelationships(entries: Entry[], folders: Folder[]) {
+  return entries.map((entry) => {
+    const derived = deriveEntryCollaboration(entry, folders);
+    return {
+      ...entry,
+      ...derived,
+      status: derived.status,
+    };
+  });
+}
+
+export function filterEntries(entries: Entry[], filter: LibraryFilter) {
+  if (filter === "all") return entries;
+  if (filter === "favorites") return entries.filter((entry) => entry.favorite);
+  return entries.filter((entry) => entry.source === filter);
 }
 
 export function SourceLibraryProvider({ children }: { children: ReactNode }) {
@@ -350,8 +431,11 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
         const parsed = JSON.parse(stored) as Partial<PersistedState>;
         if (!mounted) return;
 
-        if (parsed.entries?.length) setEntries(parsed.entries);
-        if (parsed.folders?.length) setFolders(parsed.folders);
+        const nextFolders = parsed.folders?.length ? parsed.folders : seedFolders;
+        const nextEntries = parsed.entries?.length ? hydrateEntryRelationships(parsed.entries, nextFolders) : seedEntries;
+
+        setEntries(nextEntries);
+        setFolders(syncFolderEntryIds(nextEntries, nextFolders));
         if (parsed.recentSearches?.length) setRecentSearches(parsed.recentSearches);
       } catch (error) {
         console.warn("Failed to hydrate Source Library state", error);
@@ -384,7 +468,9 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
   const addEntry = (input: CaptureInput) => {
     const sourceMeta = inferSourceMetadata(input.url);
     const entryId = `e${Date.now()}`;
-    const folder = input.folderId ? folders.find((item) => item.id === input.folderId) : undefined;
+    const initialFolderIds = input.folderId ? [input.folderId] : [];
+    const relatedFolders = folders.filter((folder) => initialFolderIds.includes(folder.id));
+    const role = getHighestShareRole(relatedFolders.map((folder) => folder.sharedRole));
 
     const nextEntry: Entry = {
       id: entryId,
@@ -397,25 +483,20 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
       author: "You",
       savedAt: "Just now",
       sourceCreatedAt: "Unknown",
-      folderIds: input.folderId ? [input.folderId] : [],
+      folderIds: initialFolderIds,
       tags: input.tags?.filter(Boolean) ?? [],
       note: input.note.trim(),
       favorite: false,
       status: input.folderId ? "filed" : "inbox",
       itemType: sourceMeta.source === "reddit" ? "post" : sourceMeta.source === "slack" ? "message" : "article",
-      shareRole: folder?.sharedRole,
-      shareReason: folder?.sharedRole ? `Shared via ${folder.name}` : undefined,
+      shareRole: role,
+      shareReason: buildShareReason(relatedFolders.map((folder) => folder.name), role),
     };
 
-    setEntries((current) => [nextEntry, ...current]);
-
-    if (input.folderId) {
-      setFolders((current) =>
-        current.map((item) =>
-          item.id === input.folderId ? { ...item, entryIds: [entryId, ...item.entryIds] } : item,
-        ),
-      );
-    }
+    const nextEntries = [nextEntry, ...entries];
+    const nextFolders = syncFolderEntryIds(nextEntries, folders);
+    setEntries(nextEntries);
+    setFolders(nextFolders);
 
     return entryId;
   };
@@ -448,29 +529,37 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
   };
 
   const updateEntryFolder = (entryId: string, folderId: string) => {
-    const folder = folders.find((item) => item.id === folderId);
-
-    setEntries((current) =>
-      current.map((entry) =>
+    const nextEntries = hydrateEntryRelationships(
+      entries.map((entry) =>
         entry.id === entryId
           ? {
               ...entry,
               folderIds: entry.folderIds.includes(folderId) ? entry.folderIds : [folderId, ...entry.folderIds],
               status: "filed",
-              shareRole: entry.shareRole ?? folder?.sharedRole,
-              shareReason: entry.shareReason ?? (folder?.sharedRole ? `Shared via ${folder.name}` : undefined),
             }
           : entry,
       ),
+      folders,
     );
+    setEntries(nextEntries);
+    setFolders(syncFolderEntryIds(nextEntries, folders));
+  };
 
-    setFolders((current) =>
-      current.map((item) =>
-        item.id === folderId && !item.entryIds.includes(entryId)
-          ? { ...item, entryIds: [entryId, ...item.entryIds] }
-          : item,
+  const toggleEntryFolderAssignment = (entryId: string, folderId: string) => {
+    const nextEntries = hydrateEntryRelationships(
+      entries.map((entry) =>
+        entry.id === entryId
+          ? {
+              ...entry,
+              folderIds: toggleFolderId(entry.folderIds, folderId),
+              status: entry.status === "archived" ? "archived" : entry.status,
+            }
+          : entry,
       ),
+      folders,
     );
+    setEntries(nextEntries);
+    setFolders(syncFolderEntryIds(nextEntries, folders));
   };
 
   const archiveEntry = (entryId: string) => {
@@ -482,32 +571,19 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
   };
 
   const setFolderRole = (folderId: string, role?: ShareRole) => {
-    const folder = folders.find((item) => item.id === folderId);
-    if (!folder) return;
-
-    setFolders((current) =>
-      current.map((item) =>
-        item.id === folderId
-          ? {
-              ...item,
-              sharedRole: role,
-              collaborators: role ? Math.max(item.collaborators ?? 2, 2) : undefined,
-            }
-          : item,
-      ),
+    const nextFolders = folders.map((folder) =>
+      folder.id === folderId
+        ? {
+            ...folder,
+            sharedRole: role,
+            collaborators: role ? Math.max(folder.collaborators ?? 2, 2) : undefined,
+          }
+        : folder,
     );
 
-    setEntries((current) =>
-      current.map((entry) =>
-        entry.folderIds.includes(folderId)
-          ? {
-              ...entry,
-              shareRole: role,
-              shareReason: role ? `Shared via ${folder.name}` : buildShareReason(undefined),
-            }
-          : entry,
-      ),
-    );
+    const nextEntries = hydrateEntryRelationships(entries, nextFolders);
+    setFolders(syncFolderEntryIds(nextEntries, nextFolders));
+    setEntries(nextEntries);
   };
 
   const addRecentSearch = (query: string) => {
@@ -523,7 +599,7 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
 
   const searchEntries = (query: string) => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return entries;
+    if (!normalized) return entries.filter((entry) => entry.status !== "archived");
 
     return entries.filter((entry) => {
       const searchable = [
@@ -536,7 +612,7 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
       ]
         .join(" ")
         .toLowerCase();
-      return searchable.includes(normalized);
+      return entry.status !== "archived" && searchable.includes(normalized);
     });
   };
 
@@ -546,14 +622,14 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
     [entries],
   );
   const pinnedFolders = useMemo(() => folders.filter((folder) => folder.isPinned), [folders]);
-  const recentEntries = useMemo(() => entries.slice(0, 4), [entries]);
+  const recentEntries = useMemo(() => entries.filter((entry) => entry.status !== "archived").slice(0, 4), [entries]);
   const favoriteEntries = useMemo(() => entries.filter((entry) => entry.favorite), [entries]);
 
   const stats = useMemo<QuickStat[]>(
     () => [
       {
         label: "Library entries",
-        value: String(entries.length),
+        value: String(entries.filter((entry) => entry.status !== "archived").length),
         detail: `${inboxEntries.length} waiting in Inbox`,
       },
       {
@@ -587,6 +663,7 @@ export function SourceLibraryProvider({ children }: { children: ReactNode }) {
       createFolder,
       toggleFavorite,
       updateEntryFolder,
+      toggleEntryFolderAssignment,
       archiveEntry,
       setFolderRole,
       addRecentSearch,

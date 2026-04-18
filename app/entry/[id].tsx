@@ -1,14 +1,14 @@
 import * as Linking from "expo-linking";
-import { router, useLocalSearchParams } from "expo-router";
+import { Link, router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { FilterChip, RoleBadge, SectionHeader, SourceBadge } from "@/components/source-library/ui";
+import { FilterChip, InfoCard, RoleBadge, SectionHeader, SourceBadge } from "@/components/source-library/ui";
 import { useSourceLibrary } from "@/lib/source-library";
 
 export default function EntryDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
-  const { getEntryById, folders, toggleFavorite } = useSourceLibrary();
+  const { getEntryById, folders, toggleFavorite, toggleEntryFolderAssignment } = useSourceLibrary();
   const entry = getEntryById(params.id);
 
   if (!entry) {
@@ -64,22 +64,40 @@ export default function EntryDetailScreen() {
             >
               <Text className="text-center text-base font-semibold text-white">Open source</Text>
             </Pressable>
-            <Pressable
-              onPress={() => router.push("/capture")}
-              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-              className="rounded-full border border-border bg-background px-5 py-4"
-            >
-              <Text className="text-base font-semibold text-foreground">Add another</Text>
-            </Pressable>
+            <Link href="/capture" asChild>
+              <Pressable
+                style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+                className="rounded-full border border-border bg-background px-5 py-4"
+              >
+                <Text className="text-base font-semibold text-foreground">Add another</Text>
+              </Pressable>
+            </Link>
           </View>
         </View>
 
         <View className="gap-4 rounded-3xl border border-border bg-surface p-5">
-          <SectionHeader title="Library context" subtitle="Why this exists in your library matters as much as the source itself." />
-          <View className="flex-row flex-wrap gap-2">
-            {entryFolders.map((folder) => (
-              <FilterChip key={folder.id} label={folder.name} active />
-            ))}
+          <SectionHeader
+            title="Library context"
+            subtitle="This item can belong to more than one folder, which is how the library stays useful without forcing a single taxonomy."
+          />
+          <View className="gap-3">
+            <Text className="text-sm font-semibold text-foreground">Assigned folders</Text>
+            <View className="flex-row flex-wrap gap-2">
+              {folders.map((folder) => {
+                const active = entry.folderIds.includes(folder.id);
+                return (
+                  <FilterChip
+                    key={folder.id}
+                    label={folder.name}
+                    active={active}
+                    onPress={() => toggleEntryFolderAssignment(entry.id, folder.id)}
+                  />
+                );
+              })}
+            </View>
+            <Text className="text-xs leading-5 text-muted">
+              Tap a folder to add or remove this entry. Removing every folder returns the item to Inbox unless it was archived.
+            </Text>
           </View>
           <View className="flex-row flex-wrap gap-2">
             {entry.tags.map((tag) => (
@@ -96,6 +114,13 @@ export default function EntryDetailScreen() {
               <Text className="text-sm leading-6 text-muted">{entry.sharedNote}</Text>
             </View>
           ) : null}
+          {entryFolders.length > 0 ? (
+            <InfoCard
+              eyebrow="Shared scope"
+              title={entry.shareRole ? `Visible as ${entry.shareRole}` : "Private item"}
+              description={entry.shareReason ?? "This item is only visible in your personal library right now."}
+            />
+          ) : null}
         </View>
 
         <View className="gap-4 rounded-3xl border border-border bg-surface p-5">
@@ -106,7 +131,7 @@ export default function EntryDetailScreen() {
             <DetailRow label="Author" value={entry.author} />
             <DetailRow label="Saved" value={entry.savedAt} />
             <DetailRow label="Originally posted" value={entry.sourceCreatedAt} />
-            <DetailRow label="Access reason" value={entry.shareReason ?? "Private to you"} />
+            <DetailRow label="Current status" value={entry.status} />
           </View>
         </View>
       </ScrollView>

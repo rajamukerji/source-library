@@ -1,4 +1,5 @@
 import { Link, router, useLocalSearchParams } from "expo-router";
+import { useMemo, useState } from "react";
 import { FlatList, Pressable, Text, View } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
@@ -10,18 +11,19 @@ import {
   RoleBadge,
   SectionHeader,
 } from "@/components/source-library/ui";
-import { useSourceLibrary } from "@/lib/source-library";
+import { buildFolderInviteMessage, buildFolderShareLink, type ShareRole, useSourceLibrary } from "@/lib/source-library";
 
-const roleOptions = [
-  { label: "Private", value: undefined },
-  { label: "Viewer", value: "viewer" as const },
-  { label: "Editor", value: "editor" as const },
+const roleOptions: Array<{ label: string; value?: ShareRole }> = [
+  { label: "Private" },
+  { label: "Viewer", value: "viewer" },
+  { label: "Editor", value: "editor" },
 ];
 
 export default function FolderDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const { getFolderById, getFolderEntries, setFolderRole } = useSourceLibrary();
   const folder = getFolderById(params.id);
+  const [inviteRole, setInviteRole] = useState<ShareRole>(folder?.sharedRole === "editor" ? "editor" : "viewer");
 
   if (!folder) {
     return (
@@ -39,6 +41,8 @@ export default function FolderDetailScreen() {
   }
 
   const folderEntries = getFolderEntries(folder.id);
+  const shareLink = useMemo(() => buildFolderShareLink(folder, inviteRole), [folder, inviteRole]);
+  const inviteMessage = useMemo(() => buildFolderInviteMessage(folder, inviteRole), [folder, inviteRole]);
 
   return (
     <ScreenContainer className="px-5 pb-6">
@@ -58,11 +62,7 @@ export default function FolderDetailScreen() {
               {folder.sharedRole ? <RoleBadge role={folder.sharedRole} /> : null}
             </View>
 
-            <InfoCard
-              eyebrow="Folder"
-              title={folder.name}
-              description={folder.description}
-            >
+            <InfoCard eyebrow="Folder" title={folder.name} description={folder.description}>
               <View className="flex-row items-center justify-between">
                 <Text className="text-sm font-medium text-foreground">{folder.entryIds.length} items</Text>
                 <Text className="text-sm text-muted">
@@ -85,6 +85,25 @@ export default function FolderDetailScreen() {
                     onPress={() => setFolderRole(folder.id, option.value)}
                   />
                 ))}
+              </View>
+            </View>
+
+            <View className="gap-3 rounded-3xl border border-border bg-surface p-5">
+              <SectionHeader
+                title="Invite preview"
+                subtitle="This MVP keeps collaboration local-first, but the invite language and share links already model the product behavior you would later back with the server."
+              />
+              <View className="flex-row flex-wrap gap-2">
+                <FilterChip label="Viewer link" active={inviteRole === "viewer"} onPress={() => setInviteRole("viewer")} />
+                <FilterChip label="Editor link" active={inviteRole === "editor"} onPress={() => setInviteRole("editor")} />
+              </View>
+              <View className="rounded-2xl bg-background px-4 py-4">
+                <Text className="text-xs font-semibold uppercase tracking-[1.6px] text-muted">Share link</Text>
+                <Text className="mt-2 text-sm leading-6 text-foreground">{shareLink}</Text>
+              </View>
+              <View className="rounded-2xl bg-background px-4 py-4">
+                <Text className="text-xs font-semibold uppercase tracking-[1.6px] text-muted">Invite copy</Text>
+                <Text className="mt-2 text-sm leading-6 text-foreground">{inviteMessage}</Text>
               </View>
             </View>
 

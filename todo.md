@@ -23,3 +23,8 @@
 - [x] Add a sharing management surface that expresses viewer and editor access as an MVP collaboration model
 - [x] Add connector roadmap affordances so Reddit is primary but future sources remain visible in-product
 - [x] Organize the project as a clean git-backed repository with a developer-friendly README and ignore rules
+- [x] Prioritize and implement the next highest-value MVP features after the local-first foundation
+- [x] Add multi-folder filing controls directly from entry detail
+- [x] Add a lightweight invite and share-link workflow in the MVP collaboration surface
+- [x] Add filtered library views for source type and favorites
+- [x] Add tests for the expanded sharing and folder-management behaviors

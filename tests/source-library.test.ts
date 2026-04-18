@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildFolderInviteMessage,
+  buildFolderShareLink,
   connectorProfiles,
+  filterEntries,
   getRoleLabel,
   inferSourceMetadata,
   recentSearchesSeed,
   seedEntries,
   seedFolders,
+  toggleFolderId,
 } from "../lib/source-library";
 
 describe("source library model", () => {
@@ -36,6 +40,21 @@ describe("source library model", () => {
   it("publishes a connector roadmap with Reddit as the live primary connector", () => {
     expect(connectorProfiles.find((connector) => connector.id === "reddit")?.status).toBe("live");
     expect(connectorProfiles.some((connector) => connector.id === "slack")).toBe(true);
+  });
+
+  it("toggles folder assignment ids predictably for multi-folder filing", () => {
+    expect(toggleFolderId(["f1"], "f2")).toEqual(["f2", "f1"]);
+    expect(toggleFolderId(["f1", "f2"], "f2")).toEqual(["f1"]);
+  });
+
+  it("builds stable viewer and editor share links for folders", () => {
+    expect(buildFolderShareLink(seedFolders[1], "editor")).toContain("role=editor");
+    expect(buildFolderInviteMessage(seedFolders[2], "viewer")).toContain("Viewer");
+  });
+
+  it("filters filed entries by favorites and source without changing the canonical dataset", () => {
+    expect(filterEntries(seedEntries, "favorites").every((entry) => entry.favorite)).toBe(true);
+    expect(filterEntries(seedEntries, "reddit").every((entry) => entry.source === "reddit")).toBe(true);
   });
 
   it("maps sharing roles to stable UI labels", () => {
